@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Búsqueda del Tesoro</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f0f2f5; text-align: center; }
+        .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; width: 90%; }
+        .hidden { display: none; }
+        .prize { color: #d9534f; font-weight: bold; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loading">Cargando...</div>
+
+        <!-- Estado: No ganador -->
+        <div id="not-winner" class="hidden">
+            <h2>¡Casi!</h2>
+            <p>Sigue buscando, el tesoro está en otro lugar.</p>
+        </div>
+
+        <!-- Estado: Ganador (antes de reclamar) -->
+        <div id="winner-claim" class="hidden">
+            <h2>¡Felicidades!</h2>
+            <p>Has encontrado un tesoro. Pulsa el botón para reclamarlo.</p>
+            <button id="claim-button" style="padding: 10px 20px; font-size: 1em; cursor: pointer;">Reclamar Premio</button>
+        </div>
+
+        <!-- Estado: Premio ya reclamado o éxito -->
+        <div id="already-claimed" class="hidden">
+            <h2>¡Vaya!</h2>
+            <p>Este tesoro ya ha sido reclamado por alguien más rápido.</p>
+        </div>
+
+        <!-- Estado: Éxito al reclamar -->
+        <div id="success" class="hidden">
+            <h2>¡Es tuyo!</h2>
+            <p>Has ganado: <span id="prize-name" class="prize"></span></p>
+            <p>Muestra esta pantalla en caja para llevártelo.</p>
+        </div>
+
+        <!-- Estado: Error (QR no válido, etc.) -->
+        <div id="error" class="hidden">
+            <h2>Error</h2>
+            <p>Este código QR no es válido o no pertenece a ninguna campaña activa.</p>
+        </div>
+    </div>
+
+    <!-- Importamos la librería de Supabase desde un CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        // Reemplaza estos valores con los de tu proyecto Supabase
+        const SUPABASE_URL = 'https://lwmnwfqwbtzyttlunsgu.supabase.co';
+        const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_3CXGvLOir1WyBWGJTU59EA_B1SdM9CL';
+
+        // Inicializamos el cliente de Supabase
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY );
+
+        // Referencias a los elementos del DOM
+        const loadingEl = document.getElementById('loading');
+        const notWinnerEl = document.getElementById('not-winner');
+        const winnerClaimEl = document.getElementById('winner-claim');
+        const alreadyClaimedEl = document.getElementById('already-claimed');
+        const successEl = document.getElementById('success');
+        const errorEl = document.getElementById('error');
+        const claimButton = document.getElementById('claim-button');
+        const prizeNameEl = document.getElementById('prize-name');
+
+        // Función para ocultar todos los estados y mostrar solo uno
+        function showState(element) {
+            [loadingEl, notWinnerEl, winnerClaimEl, alreadyClaimedEl, successEl, errorEl].forEach(el => el.classList.add('hidden'));
+            element.classList.remove('hidden');
+        }
+
+        // --- LÓGICA PRINCIPAL ---
+        async function procesarQR() {
+            // 1. Obtener el ID del QR de la URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const qrId = urlParams.get('id');
+
+            if (!qrId) {
+                showState(errorEl);
+                return;
+            }
+
+            // 2. Consultar los datos del QR en Supabase (solo lectura)
+            const { data: qrData, error: qrError } = await supabase
+                .from('qr_codes')
+                .select('is_winner, claimed_at, prize_name')
+                .eq('id', qrId)
+                .single();
+
+            if (qrError || !qrData) {
+                showState(errorEl);
+                return;
+            }
+
+            // 3. Decidir qué mostrar según el estado del QR
+            if (!qrData.is_winner) {
+                showState(notWinnerEl);
+            } else if (qrData.claimed_at) {
+                // Es ganador pero ya fue reclamado
+                showState(alreadyClaimedEl);
+            } else {
+                // Es un ganador potencial, mostramos el botón para reclamar
+                showState(winnerClaimEl);
+
+                // 4. Configurar el botón de reclamar
+                claimButton.onclick = async () => {
+                    // Deshabilitamos el botón para evitar dobles clics
+                    claimButton.disabled = true;
+                    claimButton.textContent = 'Reclamando...';
+
+                    // Llamamos a la función RPC atómica que creamos en Supabase
+                    const { data: claimResult, error: claimError } = await supabase
+                        .rpc('claim_qr_code', { qr_id_input: qrId });
+
+                    if (claimError || !claimResult) {
+                        showState(errorEl);
+                        return;
+                    }
+
+                    // Procesamos la respuesta de la función RPC
+                    if (claimResult.status === 'success') {
+                        prizeNameEl.textContent = claimResult.prize;
+                        showState(successEl);
+                    } else if (claimResult.status === 'already_claimed') {
+                        showState(alreadyClaimedEl);
+                    } else {
+                        // Otros estados como 'not_found' o 'not_winner'
+                        showState(errorEl);
+                    }
+                };
+            }
+        }
+
+        // Ejecutamos la función al cargar la página
+        procesarQR();
+    </script>
+</body>
+</html>
