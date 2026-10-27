@@ -58,7 +58,7 @@
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_3CXGvLOir1WyBWGJTU59EA_B1SdM9CL';
 
         // Inicializamos el cliente de Supabase
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY );
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY );
 
         // Referencias a los elementos del DOM
         const loadingEl = document.getElementById('loading');
