@@ -88,7 +88,7 @@
             }
 
             // 2. Consultar los datos del QR en Supabase (solo lectura)
-            const { data: qrData, error: qrError } = await supabase
+            const { data: qrData, error: qrError } = await supabaseClient
                 .from('qr_codes')
                 .select('is_winner, claimed_at, prize_name')
                 .eq('id', qrId)
@@ -116,7 +116,7 @@
                     claimButton.textContent = 'Reclamando...';
 
                     // Llamamos a la función RPC atómica que creamos en Supabase
-                    const { data: claimResult, error: claimError } = await supabase
+                    const { data: claimResult, error: claimError } = await supabaseClient
                         .rpc('claim_qr_code', { qr_id_input: qrId });
 
                     if (claimError || !claimResult) {
